@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "manga-yomi",
+  "version": "0.1.0",
+  "description": "OCR overlay that makes Yomitan work on manga sites",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "http://127.0.0.1:8765/*",
+    "https://ynjn.jp/*",
+    "https://*.championcross.jp/*"
+  ],
+  "optional_host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://ynjn.jp/*", "https://*.championcross.jp/*"],
+      "js": ["content.js"],
+      "css": ["overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
