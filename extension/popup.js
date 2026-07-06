@@ -16,11 +16,17 @@ chrome.runtime.sendMessage({ type: "health" }).then((res) => {
   }
 });
 
-chrome.storage.local.get("debugBoxes").then((v) => {
+const autoBox = document.getElementById("auto");
+
+chrome.storage.local.get(["debugBoxes", "autoOcr"]).then((v) => {
   debugBox.checked = !!v.debugBoxes;
+  autoBox.checked = v.autoOcr ?? true;
 });
 debugBox.addEventListener("change", () => {
   chrome.storage.local.set({ debugBoxes: debugBox.checked });
+});
+autoBox.addEventListener("change", () => {
+  chrome.storage.local.set({ autoOcr: autoBox.checked });
 });
 
 document.getElementById("ocr-btn").addEventListener("click", async () => {

@@ -26,8 +26,8 @@
    colors and falls back to that default, so `transparent` doesn't work —
    alpha 1/255 is honored and still invisible. */
 .manga-yomi-line::selection {
-  background: rgba(0, 0, 0, 0.004) !important;
-  color: rgba(0, 0, 0, 0.004) !important;
+  background: rgba(0, 0, 0, 0.02) !important;
+  color: rgba(0, 0, 0, 0.02) !important;
 }
 
 #manga-yomi-toast {

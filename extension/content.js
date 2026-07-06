@@ -1,18 +1,26 @@
 const OVERLAY_ID = "manga-yomi-overlay";
 const TOAST_ID = "manga-yomi-toast";
 let debugBoxes = false;
+let autoOcr = true;
 
-chrome.storage.local.get("debugBoxes").then((v) => {
+chrome.storage.local.get(["debugBoxes", "autoOcr"]).then((v) => {
   debugBoxes = !!v.debugBoxes;
+  autoOcr = v.autoOcr ?? true;
 });
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.debugBoxes) {
     debugBoxes = !!changes.debugBoxes.newValue;
     document.getElementById(OVERLAY_ID)?.classList.toggle("debug", debugBoxes);
   }
+  if (changes.autoOcr) {
+    autoOcr = changes.autoOcr.newValue ?? true;
+  }
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === "capture-done") {
+    restoreUi();
+  }
   if (msg.type === "trigger-ocr") {
     toast("OCR...");
     runOcr()
@@ -29,7 +37,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // In fullscreen, only the fullscreened element's subtree renders on top;
-// anything attached to <html> is covered. So mount inside it when active.
+// anything attached to <html> is covered (popovers/top layer proved
+// unreliable above fullscreen too). So mount inside it when active.
 function overlayRoot() {
   const fs = document.fullscreenElement;
   if (fs && !["IMG", "VIDEO", "CANVAS"].includes(fs.tagName)) return fs;
@@ -49,24 +58,86 @@ function toast(msg) {
   toastTimer = setTimeout(() => t.remove(), 2500);
 }
 
-async function runOcr() {
+// Bumped on any event that moves/replaces the page content, so an OCR
+// that was in flight during a flip doesn't render a stale overlay.
+let ocrGen = 0;
+function invalidateOverlay() {
+  ocrGen++;
   clearOverlay();
-  const rect = pageRect();
-  const dpr = window.devicePixelRatio;
-  const res = await chrome.runtime.sendMessage({
-    type: "ocr-page",
-    // the capture is in device px; scale here so background needs no dpr
-    rect: rect && {
-      x: rect.x * dpr,
-      y: rect.y * dpr,
-      width: rect.width * dpr,
-      height: rect.height * dpr,
-    },
-  });
-  if (!res) throw new Error("no response from background");
-  if (res.error) throw new Error(res.error);
-  renderOverlay(res, rect);
-  return res.blocks.filter((b) => b.text).length;
+}
+
+let autoTimer;
+function scheduleAutoOcr() {
+  if (!autoOcr) return;
+  clearTimeout(autoTimer);
+  // wait for the flip animation / new page render to settle
+  autoTimer = setTimeout(() => {
+    toast("OCR...");
+    runOcr()
+      .then((n) => toast(`${n} bubble(s) found`))
+      .catch((e) => toast(`OCR failed: ${e.message}`));
+  }, 700);
+}
+
+// The capture must not include extension UI, or OCR reads it and overlays
+// its text as invisible ghosts (e.g. Yomitan's popup definitions ending up
+// scannable over the manga). Hide our toast and any visible iframes
+// (Yomitan's popup) until the background signals the screenshot is taken.
+let restoreUi = () => {};
+function hideUiForCapture() {
+  const els = [document.getElementById(TOAST_ID)];
+  els.push(...document.querySelectorAll("iframe"));
+  for (const host of document.querySelectorAll("*")) {
+    if (host.shadowRoot) els.push(...host.shadowRoot.querySelectorAll("iframe"));
+  }
+  const hidden = [];
+  for (const el of els) {
+    if (!el || el.getClientRects().length === 0) continue;
+    hidden.push([el, el.style.visibility]);
+    el.style.visibility = "hidden";
+  }
+  let restored = false;
+  restoreUi = () => {
+    if (restored) return;
+    restored = true;
+    for (const [el, vis] of hidden) el.style.visibility = vis;
+  };
+}
+
+// Two frames so the hidden UI / removed overlay is actually painted out
+// before captureVisibleTab grabs the screen.
+function paintFlush() {
+  return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+}
+
+async function runOcr() {
+  const gen = ocrGen;
+  clearOverlay();
+  hideUiForCapture();
+  const restoreTimer = setTimeout(restoreUi, 3000);
+  let res;
+  try {
+    await paintFlush();
+    const rect = pageRect();
+    const dpr = window.devicePixelRatio;
+    res = await chrome.runtime.sendMessage({
+      type: "ocr-page",
+      // the capture is in device px; scale here so background needs no dpr
+      rect: rect && {
+        x: rect.x * dpr,
+        y: rect.y * dpr,
+        width: rect.width * dpr,
+        height: rect.height * dpr,
+      },
+    });
+    if (!res) throw new Error("no response from background");
+    if (res.error) throw new Error(res.error);
+    if (gen === ocrGen) renderOverlay(res, rect);
+    return res.blocks.filter((b) => b.text).length;
+  } finally {
+    clearTimeout(restoreTimer);
+    restoreUi();
+  }
 }
 
 // Bounding rect of the manga page image(s) in the viewport, so the capture
@@ -111,12 +182,19 @@ function renderOverlay(res, rect) {
   const overlay = document.createElement("div");
   overlay.id = OVERLAY_ID;
   if (debugBoxes) overlay.classList.add("debug");
+  overlayRoot().appendChild(overlay);
+
+  // If an ancestor of the mount root is CSS-transformed (viewer zoom/pan),
+  // position:fixed coordinates are no longer viewport coordinates. Measure
+  // where the overlay's origin actually landed and undo offset and scale.
+  const box = overlay.getBoundingClientRect();
+  const k = overlay.offsetWidth ? box.width / overlay.offsetWidth : 1;
 
   // OCR image is the cropped page (or full viewport) in device pixels;
   // convert to CSS px and offset back to the crop's position.
   const scale = (rect ? rect.width : window.innerWidth) / res.img_width;
-  const offX = rect ? rect.x : 0;
-  const offY = rect ? rect.y : 0;
+  const offX = (rect ? rect.x : 0) - box.left;
+  const offY = (rect ? rect.y : 0) - box.top;
 
   for (const block of res.blocks) {
     if (!block.text) continue;
@@ -129,23 +207,21 @@ function renderOverlay(res, rect) {
 
       const el = document.createElement("div");
       el.className = "manga-yomi-line" + (block.vertical ? " vertical" : "");
-      el.style.left = `${offX + x1 * scale}px`;
-      el.style.top = `${offY + y1 * scale}px`;
-      el.style.width = `${w}px`;
-      el.style.height = `${h}px`;
+      el.style.left = `${(offX + x1 * scale) / k}px`;
+      el.style.top = `${(offY + y1 * scale) / k}px`;
+      el.style.width = `${w / k}px`;
+      el.style.height = `${h / k}px`;
       // Manga text is nearly all full-width chars: advance ≈ font-size,
       // so size glyphs off the line's real length, not mokuro's font_size.
       const fontSize = block.vertical
         ? Math.min(w, h / line.length)
         : Math.min(h, w / line.length);
-      el.style.fontSize = `${fontSize}px`;
-      el.style.lineHeight = block.vertical ? `${w}px` : `${h}px`;
+      el.style.fontSize = `${fontSize / k}px`;
+      el.style.lineHeight = `${(block.vertical ? w : h) / k}px`;
       el.textContent = line;
       overlay.appendChild(el);
     });
   }
-
-  overlayRoot().appendChild(overlay);
 }
 
 function quadBounds(quad) {
@@ -155,15 +231,21 @@ function quadBounds(quad) {
 }
 
 // Overlay coordinates are viewport-relative; invalidate when the layout moves.
-window.addEventListener("resize", clearOverlay);
-window.addEventListener("scroll", clearOverlay, true);
-document.addEventListener("fullscreenchange", clearOverlay);
+window.addEventListener("resize", invalidateOverlay);
+window.addEventListener("scroll", invalidateOverlay, true);
+document.addEventListener("fullscreenchange", () => {
+  invalidateOverlay();
+  scheduleAutoOcr();
+});
 
-// Page flips (click / arrow keys) make the overlay stale — clear it.
+// Page flips (click / arrow keys) make the overlay stale — clear it and,
+// in auto mode, OCR the new page once it settles.
 window.addEventListener(
   "mousedown",
   (e) => {
-    if (!e.target.closest?.(`#${OVERLAY_ID}`)) clearOverlay();
+    if (e.target.closest?.(`#${OVERLAY_ID}`)) return;
+    invalidateOverlay();
+    scheduleAutoOcr();
   },
   true
 );
@@ -173,22 +255,24 @@ window.addEventListener(
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     const t = e.target;
     if (t?.tagName === "INPUT" || t?.tagName === "TEXTAREA" || t?.isContentEditable) return;
-    clearOverlay();
+    invalidateOverlay();
+    scheduleAutoOcr();
   },
   true
 );
 
-// Yomitan's scan-selection otherwise lingers as a visible highlight;
-// drop it as soon as the scan key is released (popup stays open).
-window.addEventListener(
-  "keyup",
-  (e) => {
-    if (e.key !== "Shift") return;
+// Yomitan's scan-selection otherwise lingers as a visible highlight.
+// A keyup listener misses it when focus is inside Yomitan's popup frame,
+// but selectionchange fires on our document regardless of focus — clear
+// any overlay selection shortly after it settles (popup stays open).
+let selClearTimer;
+document.addEventListener("selectionchange", () => {
+  clearTimeout(selClearTimer);
+  selClearTimer = setTimeout(() => {
     const overlay = document.getElementById(OVERLAY_ID);
     const sel = window.getSelection();
     if (overlay && sel?.anchorNode && overlay.contains(sel.anchorNode)) {
       sel.removeAllRanges();
     }
-  },
-  true
-);
+  }, 600);
+});

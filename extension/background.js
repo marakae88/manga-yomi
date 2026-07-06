@@ -25,24 +25,45 @@ chrome.commands.onCommand.addListener(async (command) => {
   }
 });
 
+// Auto mode re-OCRs on every click/flip; identical captures (flipping back,
+// clicks that don't change the page) should not hit the GPU again.
+const ocrCache = new Map();
+const OCR_CACHE_MAX = 20;
+
 // rect is in device pixels, matching the capture
 async function ocrVisibleTab(tab, rect) {
   const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
     format: "png",
   });
+  // capture is done: the content script can unhide the UI it hid
+  chrome.tabs.sendMessage(tab.id, { type: "capture-done" }).catch(() => {});
   let blob = await (await fetch(dataUrl)).blob();
   if (rect) {
     blob = await cropBlob(blob, rect);
   }
+  const bytes = await blob.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const key = String.fromCharCode(...new Uint8Array(digest));
+  const hit = ocrCache.get(key);
+  if (hit) {
+    ocrCache.delete(key);
+    ocrCache.set(key, hit);
+    return hit;
+  }
   const res = await fetch(`${SERVER}/ocr`, {
     method: "POST",
     headers: { "Content-Type": "application/octet-stream" },
-    body: blob,
+    body: bytes,
   });
   if (!res.ok) {
     throw new Error(`OCR server responded ${res.status}`);
   }
-  return await res.json();
+  const json = await res.json();
+  ocrCache.set(key, json);
+  if (ocrCache.size > OCR_CACHE_MAX) {
+    ocrCache.delete(ocrCache.keys().next().value);
+  }
+  return json;
 }
 
 async function cropBlob(blob, rect) {
