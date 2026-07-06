@@ -21,10 +21,13 @@
   writing-mode: vertical-rl;
 }
 
-/* Yomitan selects the scanned text; keep the highlight from hiding the manga */
+/* Yomitan scans by selecting our text, which Chrome paints as a visible
+   glyph on its theme highlight. Chromium DISCARDS alpha-0 ::selection
+   colors and falls back to that default, so `transparent` doesn't work —
+   alpha 1/255 is honored and still invisible. */
 .manga-yomi-line::selection {
-  background: rgba(90, 160, 255, 0.2);
-  color: transparent;
+  background: rgba(0, 0, 0, 0.004) !important;
+  color: rgba(0, 0, 0, 0.004) !important;
 }
 
 #manga-yomi-toast {

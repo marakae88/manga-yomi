@@ -177,3 +177,18 @@ window.addEventListener(
   },
   true
 );
+
+// Yomitan's scan-selection otherwise lingers as a visible highlight;
+// drop it as soon as the scan key is released (popup stays open).
+window.addEventListener(
+  "keyup",
+  (e) => {
+    if (e.key !== "Shift") return;
+    const overlay = document.getElementById(OVERLAY_ID);
+    const sel = window.getSelection();
+    if (overlay && sel?.anchorNode && overlay.contains(sel.anchorNode)) {
+      sel.removeAllRanges();
+    }
+  },
+  true
+);
