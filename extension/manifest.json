@@ -23,5 +23,11 @@
   ],
   "action": {
     "default_popup": "popup.html"
+  },
+  "commands": {
+    "ocr-page": {
+      "suggested_key": { "default": "Alt+O" },
+      "description": "OCR the current page"
+    }
   }
 }

@@ -2,5 +2,7 @@
 # will pull the CPU-only wheel as a dependency of mokuro:
 #   pip install torch --index-url https://download.pytorch.org/whl/cu121
 mokuro>=0.2.4
+# manga-ocr's model only has a slow tokenizer; transformers 5.x dropped those
+transformers<5
 fastapi
 uvicorn[standard]

@@ -1,11 +1,10 @@
-import base64
 import os
 import tempfile
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+import numpy as np
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
 state = {}
 
@@ -17,7 +16,11 @@ async def lifespan(app: FastAPI):
 
     state["device"] = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Loading models on {state['device']} (first run downloads ~400MB)...")
-    state["mpocr"] = MangaPageOcr(force_cpu=state["device"] == "cpu")
+    # default 1024 crushes small text on hi-res screenshots before detection
+    state["mpocr"] = MangaPageOcr(
+        force_cpu=state["device"] == "cpu",
+        detector_input_size=2048,
+    )
     print("Models loaded. Ready.")
     yield
 
@@ -31,8 +34,12 @@ app.add_middleware(
 )
 
 
-class OcrRequest(BaseModel):
-    image: str  # base64-encoded PNG/JPEG, optionally a data URL
+def plain(v):  # mokuro returns numpy scalars/arrays, which break JSON
+    if isinstance(v, (np.ndarray, np.generic)):
+        return v.tolist()
+    if isinstance(v, (list, tuple)):
+        return [plain(x) for x in v]
+    return v
 
 
 @app.get("/health")
@@ -44,17 +51,13 @@ def health():
 
 
 @app.post("/ocr")
-def ocr(req: OcrRequest):
+async def ocr(request: Request):
     if "mpocr" not in state:
         raise HTTPException(status_code=503, detail="models still loading")
 
-    data = req.image
-    if data.startswith("data:"):
-        data = data.split(",", 1)[1]
-    try:
-        img_bytes = base64.b64decode(data)
-    except Exception:
-        raise HTTPException(status_code=400, detail="invalid base64 image")
+    img_bytes = await request.body()
+    if not img_bytes:
+        raise HTTPException(status_code=400, detail="empty request body")
 
     # MangaPageOcr reads from a path, so round-trip through a temp file
     fd, path = tempfile.mkstemp(suffix=".png")
@@ -70,18 +73,17 @@ def ocr(req: OcrRequest):
         lines = b.get("lines", [])
         blocks.append(
             {
-                "box": b["box"],  # [x1, y1, x2, y2] in screenshot pixels
+                "box": plain(b["box"]),  # [x1, y1, x2, y2] in image pixels
                 "vertical": bool(b.get("vertical", True)),
-                "font_size": b.get("font_size"),
-                "lines_coords": b.get("lines_coords", []),
-                "lines": lines,
+                "lines_coords": plain(b.get("lines_coords", [])),
+                "lines": list(lines),
                 "text": "".join(lines),
             }
         )
 
     return {
-        "img_width": result.get("img_width"),
-        "img_height": result.get("img_height"),
+        "img_width": plain(result.get("img_width")),
+        "img_height": plain(result.get("img_height")),
         "blocks": blocks,
     }
 

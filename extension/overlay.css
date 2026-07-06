@@ -5,23 +5,42 @@
   pointer-events: none;
 }
 
-.manga-yomi-block {
+.manga-yomi-line {
   position: absolute;
   color: transparent;
   pointer-events: auto;
   user-select: text;
   cursor: default;
-  line-height: 1.15;
   overflow: visible;
   white-space: nowrap;
   font-family: sans-serif;
+  text-align: center;
 }
 
-.manga-yomi-block.vertical {
+.manga-yomi-line.vertical {
   writing-mode: vertical-rl;
 }
 
-#manga-yomi-overlay.debug .manga-yomi-block {
+/* Yomitan selects the scanned text; keep the highlight from hiding the manga */
+.manga-yomi-line::selection {
+  background: rgba(90, 160, 255, 0.2);
+  color: transparent;
+}
+
+#manga-yomi-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483647;
+  background: rgba(20, 20, 20, 0.85);
+  color: #fff;
+  font: 13px/1.4 sans-serif;
+  padding: 6px 12px;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+#manga-yomi-overlay.debug .manga-yomi-line {
   color: rgba(255, 0, 0, 0.65);
   outline: 1px solid rgba(255, 0, 0, 0.5);
   background: rgba(255, 255, 0, 0.15);
