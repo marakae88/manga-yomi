@@ -313,10 +313,14 @@ function renderOverlay(res, rect) {
       if (cols > 1) {
         const chars = Math.ceil(n / cols);
         // stretch each column to the full box height so wrap points land
-        // exactly every `chars` characters
-        el.style.letterSpacing = `${(h - chars * fontSize) / chars / k}px`;
+        // exactly every `chars` characters; the -0.2px keeps float rounding
+        // from pushing an exact-fit last char onto the next column
+        el.style.letterSpacing = `${(h - chars * fontSize) / chars / k - 0.2}px`;
         el.style.lineHeight = `${w / cols / k}px`;
         el.style.wordBreak = "break-all";
+        // the class sets nowrap (right for true single lines); wrapping is
+        // the entire point of this branch, so re-enable it
+        el.style.whiteSpace = "normal";
       } else {
         // advance ≈ font-size is a few % off, and the error accumulates so
         // the LAST character lands short of the box end; spread the leftover
