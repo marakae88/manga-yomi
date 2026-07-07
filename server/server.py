@@ -16,7 +16,6 @@ from io import BytesIO
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
 state = {}
@@ -38,13 +37,10 @@ async def lifespan(app: FastAPI):
     yield
 
 
+# No CORS middleware on purpose: the extension talks to the server from its
+# background worker, which is exempt via host_permissions. Without CORS
+# headers, random web pages cannot read responses (e.g. /debug/last).
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 # The detector's line quads can be shifted by up to a full column (varies
@@ -256,7 +252,7 @@ def plain(v):  # mokuro returns numpy scalars/arrays, which break JSON
     return v
 
 
-REV = "2026-07-06.12"
+REV = "2026-07-07.1"
 
 
 @app.get("/health")
