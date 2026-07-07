@@ -110,15 +110,41 @@ function paintFlush() {
   return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 }
 
+// Debug-mode registration check: bake markers at the crop rect's corners and
+// center into the capture itself. In /debug/last they must sit exactly at the
+// image corners/center; any deviation IS the capture↔viewport misregistration.
+function placeFiducials(rect) {
+  if (!debugBoxes || !rect) return () => {};
+  const root = overlayRoot();
+  const S = 8;
+  const pts = [
+    [rect.x, rect.y],
+    [rect.x + rect.width - S, rect.y],
+    [rect.x, rect.y + rect.height - S],
+    [rect.x + rect.width - S, rect.y + rect.height - S],
+    [rect.x + (rect.width - S) / 2, rect.y + (rect.height - S) / 2],
+  ];
+  const els = pts.map(([x, y]) => {
+    const d = document.createElement("div");
+    d.className = "manga-yomi-fiducial";
+    d.style.left = `${x}px`;
+    d.style.top = `${y}px`;
+    root.appendChild(d);
+    return d;
+  });
+  return () => els.forEach((e) => e.remove());
+}
+
 async function runOcr() {
   const gen = ocrGen;
   clearOverlay();
   hideUiForCapture();
+  const rect = pageRect();
+  const removeFiducials = placeFiducials(rect);
   const restoreTimer = setTimeout(restoreUi, 3000);
   let res;
   try {
     await paintFlush();
-    const rect = pageRect();
     const dpr = window.devicePixelRatio;
     res = await chrome.runtime.sendMessage({
       type: "ocr-page",
@@ -135,6 +161,7 @@ async function runOcr() {
     if (gen === ocrGen) renderOverlay(res, rect);
     return res.blocks.filter((b) => b.text).length;
   } finally {
+    removeFiducials();
     clearTimeout(restoreTimer);
     restoreUi();
   }
@@ -196,6 +223,31 @@ function renderOverlay(res, rect) {
   const offX = (rect ? rect.x : 0) - box.left;
   const offY = (rect ? rect.y : 0) - box.top;
 
+  // Debug frame: where we think the OCR'd crop sits, mapped through the
+  // same offset/scale/k math as the text. If it doesn't hug the manga page,
+  // the geometry is wrong and the console numbers say by how much.
+  const frame = document.createElement("div");
+  frame.className = "manga-yomi-debug-frame";
+  frame.style.left = `${offX / k}px`;
+  frame.style.top = `${offY / k}px`;
+  frame.style.width = `${(rect ? rect.width : window.innerWidth) / k}px`;
+  frame.style.height = `${(rect ? rect.height : window.innerHeight) / k}px`;
+  overlay.appendChild(frame);
+  if (debugBoxes) {
+    console.log("[manga-yomi] geometry", {
+      k,
+      overlayBox: { left: box.left, top: box.top, width: box.width, height: box.height },
+      overlayLayout: { width: overlay.offsetWidth, height: overlay.offsetHeight },
+      rect,
+      dpr: window.devicePixelRatio,
+      viewport: { w: window.innerWidth, h: window.innerHeight },
+      img: { w: res.img_width, h: res.img_height },
+      fullscreen: document.fullscreenElement
+        ? `${document.fullscreenElement.tagName}.${document.fullscreenElement.className}`
+        : null,
+    });
+  }
+
   for (const block of res.blocks) {
     if (!block.text) continue;
     block.lines.forEach((line, i) => {
@@ -213,10 +265,15 @@ function renderOverlay(res, rect) {
       el.style.height = `${h / k}px`;
       // Manga text is nearly all full-width chars: advance ≈ font-size,
       // so size glyphs off the line's real length, not mokuro's font_size.
-      const fontSize = block.vertical
-        ? Math.min(w, h / line.length)
-        : Math.min(h, w / line.length);
+      const n = line.length;
+      const fontSize = block.vertical ? Math.min(w, h / n) : Math.min(h, w / n);
       el.style.fontSize = `${fontSize / k}px`;
+      // advance ≈ font-size is a few % off, and the error accumulates so the
+      // LAST character lands short of the box end; spread the leftover
+      if (n > 1) {
+        const leftover = (block.vertical ? h : w) - n * fontSize;
+        el.style.letterSpacing = `${leftover / (n - 1) / k}px`;
+      }
       el.style.lineHeight = `${(block.vertical ? w : h) / k}px`;
       el.textContent = line;
       overlay.appendChild(el);

@@ -43,6 +43,24 @@
   pointer-events: none;
 }
 
+.manga-yomi-debug-frame {
+  position: absolute;
+  pointer-events: none;
+}
+
+.manga-yomi-fiducial {
+  position: fixed;
+  width: 8px;
+  height: 8px;
+  background: magenta;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
+#manga-yomi-overlay.debug .manga-yomi-debug-frame {
+  outline: 2px solid rgba(0, 110, 255, 0.9);
+}
+
 #manga-yomi-overlay.debug .manga-yomi-line {
   color: rgba(255, 0, 0, 0.65);
   outline: 1px solid rgba(255, 0, 0, 0.5);
