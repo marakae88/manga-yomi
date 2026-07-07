@@ -10,9 +10,8 @@ bubbles, and the extension overlays invisible selectable text on top of them.
 Your existing Yomitan install then works exactly as it does on regular
 articles: popup, definitions, audio, Anki.
 
-```
-page flip → screenshot → local OCR server → invisible text overlay → Yomitan lookup
-```
+<!-- demo video: drag Manga-Yomi.mp4 into this line in the GitHub web editor -->
+
 
 Everything runs locally; no image ever leaves your machine.
 
