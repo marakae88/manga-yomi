@@ -10,10 +10,7 @@ bubbles, and the extension overlays invisible selectable text on top of them.
 Your existing Yomitan install then works exactly as it does on regular
 articles: popup, definitions, audio, Anki.
 
-
 https://github.com/user-attachments/assets/4d636695-bb05-4490-bc55-c00db2909b2b
-
-
 
 Everything runs locally; no image ever leaves your machine.
 
@@ -112,5 +109,6 @@ Planned: local files / offline reader support.
 
 ## License
 
-Private project. Depends on mokuro / comic-text-detector (GPL-3.0) and
-manga-ocr (Apache-2.0). GPL-3.0 obligations apply if ever distributed.
+[GPL-3.0](LICENSE). Built on [mokuro](https://github.com/kha-white/mokuro) and
+[comic-text-detector](https://github.com/dmMaze/comic-text-detector) (both
+GPL-3.0) and [manga-ocr](https://github.com/kha-white/manga-ocr) (Apache-2.0).
