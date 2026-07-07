@@ -39,13 +39,60 @@
         color: #555;
         min-height: 1em;
       }
+      #server-hint {
+        display: none;
+        margin: -4px 0 10px 16px;
+        color: #888;
+        font-size: 12px;
+      }
+      #sites {
+        margin-top: 10px;
+        border-top: 1px solid #ddd;
+        padding-top: 8px;
+      }
+      #sites h4 {
+        margin: 0 0 4px;
+        font-size: 12px;
+        color: #666;
+        font-weight: normal;
+      }
+      .site-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1px 0;
+      }
+      .site-row button {
+        width: auto;
+        margin: 0;
+        padding: 0 6px;
+        border: none;
+        background: none;
+        color: #ff4136;
+        font-size: 14px;
+      }
+      #site-host {
+        max-width: 130px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        direction: rtl;
+      }
     </style>
   </head>
   <body>
     <div id="status"><span id="dot"></span><span id="status-text">Checking server...</span></div>
+    <div id="server-hint">Start it: run <code>start-tray.vbs</code> (or <code>run-server.bat</code>) in the server folder.</div>
     <button id="ocr-btn">OCR this page</button>
+    <label id="site-label" hidden>
+      <input type="checkbox" id="site-auto" /> Auto-OCR on <span id="site-host"></span>
+    </label>
     <label><input type="checkbox" id="auto" /> Auto OCR on page flip</label>
     <label><input type="checkbox" id="debug" /> Show text boxes (debug)</label>
+    <div id="sites" hidden>
+      <h4>Auto-OCR sites</h4>
+      <div id="site-list"></div>
+    </div>
     <div id="result"></div>
     <script src="popup.js"></script>
   </body>

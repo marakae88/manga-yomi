@@ -1,4 +1,65 @@
 const SERVER = "http://127.0.0.1:8765";
+const DEFAULT_SITES = ["ynjn.jp", "championcross.jp"];
+
+// Auto-OCR sites live in storage; one dynamically-registered content script
+// (persists across restarts) covers them, so auto mode works on page load
+// without any broad host permission.
+async function syncAutoSites() {
+  const { autoSites } = await chrome.storage.local.get("autoSites");
+  const sites = autoSites ?? DEFAULT_SITES;
+  const old = await chrome.scripting.getRegisteredContentScripts({
+    ids: ["manga-yomi-auto"],
+  });
+  if (old.length) {
+    await chrome.scripting.unregisterContentScripts({ ids: ["manga-yomi-auto"] });
+  }
+  if (!sites.length) return;
+  await chrome.scripting.registerContentScripts([
+    {
+      id: "manga-yomi-auto",
+      matches: sites.flatMap((h) => [`*://${h}/*`, `*://*.${h}/*`]),
+      js: ["content.js"],
+      css: ["overlay.css"],
+      runAt: "document_idle",
+    },
+  ]);
+}
+
+chrome.runtime.onInstalled.addListener(async () => {
+  const { autoSites } = await chrome.storage.local.get("autoSites");
+  if (!autoSites) {
+    await chrome.storage.local.set({ autoSites: DEFAULT_SITES });
+  }
+  syncAutoSites().catch((e) => console.error("[manga-yomi] site sync failed", e));
+});
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes.autoSites) {
+    syncAutoSites().catch((e) => console.error("[manga-yomi] site sync failed", e));
+  }
+});
+
+// Works on any tab: reach the content script if present, otherwise inject on
+// the fly (Alt+O and opening the popup both grant activeTab).
+async function triggerOcr(tab) {
+  try {
+    return await chrome.tabs.sendMessage(tab.id, { type: "trigger-ocr" });
+  } catch {
+    try {
+      await chrome.scripting.insertCSS({
+        target: { tabId: tab.id },
+        files: ["overlay.css"],
+      });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["content.js"],
+      });
+      return await chrome.tabs.sendMessage(tab.id, { type: "trigger-ocr" });
+    } catch {
+      // chrome:// pages, the Web Store, etc. — nothing we can do
+      return { ok: false, error: "can't run on this page" };
+    }
+  }
+}
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "ocr-page") {
@@ -14,31 +75,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .catch((e) => sendResponse({ error: String(e) }));
     return true;
   }
+  if (msg.type === "trigger-ocr-tab") {
+    chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then(([tab]) => (tab?.id ? triggerOcr(tab) : { ok: false, error: "no tab" }))
+      .then(sendResponse);
+    return true;
+  }
 });
 
 chrome.commands.onCommand.addListener(async (command) => {
   if (command !== "ocr-page") return;
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return;
-  try {
-    await chrome.tabs.sendMessage(tab.id, { type: "trigger-ocr" });
-  } catch {
-    // no content script in this tab — a site outside the manifest matches.
-    // The keyboard command grants activeTab, so inject on the fly.
-    try {
-      await chrome.scripting.insertCSS({
-        target: { tabId: tab.id },
-        files: ["overlay.css"],
-      });
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ["content.js"],
-      });
-      await chrome.tabs.sendMessage(tab.id, { type: "trigger-ocr" });
-    } catch {
-      // chrome:// pages, the Web Store, etc. — nothing we can do
-    }
-  }
+  await triggerOcr(tab);
 });
 
 // Auto mode re-OCRs on every click/flip; identical captures (flipping back,

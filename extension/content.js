@@ -6,15 +6,19 @@ window.__mangaYomiLoaded = true;
 
 const OVERLAY_ID = "manga-yomi-overlay";
 const TOAST_ID = "manga-yomi-toast";
-// auto-OCR-on-flip is only tuned for the manga readers; on arbitrary
+// auto-OCR-on-flip only runs on sites enabled in the popup; on other
 // sites (injected via Alt+O) every click would trigger a capture
-const AUTO_SITE = /(^|\.)ynjn\.jp$|(^|\.)championcross\.jp$/.test(location.hostname);
+let autoSite = false;
 let debugBoxes = false;
 let autoOcr = true;
 
-chrome.storage.local.get(["debugBoxes", "autoOcr"]).then((v) => {
+const siteMatch = (h) =>
+  location.hostname === h || location.hostname.endsWith("." + h);
+
+chrome.storage.local.get(["debugBoxes", "autoOcr", "autoSites"]).then((v) => {
   debugBoxes = !!v.debugBoxes;
   autoOcr = v.autoOcr ?? true;
+  autoSite = (v.autoSites ?? []).some(siteMatch);
 });
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.debugBoxes) {
@@ -23,6 +27,11 @@ chrome.storage.onChanged.addListener((changes) => {
   }
   if (changes.autoOcr) {
     autoOcr = changes.autoOcr.newValue ?? true;
+  }
+  if (changes.autoSites) {
+    const was = autoSite;
+    autoSite = (changes.autoSites.newValue ?? []).some(siteMatch);
+    if (autoSite && !was) scheduleAutoOcr();
   }
 });
 
@@ -77,7 +86,7 @@ function invalidateOverlay() {
 
 let autoTimer;
 function scheduleAutoOcr() {
-  if (!autoOcr || !AUTO_SITE) return;
+  if (!autoOcr || !autoSite) return;
   clearTimeout(autoTimer);
   // wait for the flip animation / new page render to settle
   autoTimer = setTimeout(() => {
