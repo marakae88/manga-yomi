@@ -11,10 +11,13 @@ Your existing Yomitan install then works exactly as it does on regular
 articles: popup, definitions, audio, Anki.
 
 ```
-flip page → screenshot → localhost OCR (GPU) → invisible text overlay → hover + Shift → Yomitan popup
+page flip → screenshot → local OCR server → invisible text overlay → Yomitan lookup
 ```
 
 Everything runs locally; no image ever leaves your machine.
+
+Built and tested on Windows with Chrome. Other browsers and platforms are
+untested.
 
 ## Setup
 
@@ -24,25 +27,43 @@ Everything runs locally; no image ever leaves your machine.
 installed in Chrome with at least one Japanese dictionary. manga-yomi only
 provides the text layer; Yomitan does all the lookup.
 
-### 1. OCR server (Windows)
+### 1. Get the code
+
+Either clone the repo:
+
+```
+git clone https://github.com/marakae88/manga-yomi.git
+```
+
+or click **Code → Download ZIP** on GitHub and extract it. There is nothing to
+build; the repo folder is the installation. Put it somewhere permanent with
+~10 GB free: the extension loads directly from it, and the server installs its
+Python environment and models inside it. If you move the folder later, redo
+steps 2 and 3.
+
+### 2. OCR server (Windows)
 
 Requires Python 3.10–3.12 from [python.org](https://www.python.org/downloads/)
-(not the Microsoft Store version) and an NVIDIA GPU (CPU works too, just slower).
+(not the Microsoft Store version).
 
 Double-click `server/run-server.bat`. On first run it creates a venv, installs
-dependencies (CUDA torch + mokuro, several GB), and downloads the OCR models
+dependencies (torch + mokuro, several GB), and downloads the OCR models
 (~400 MB). Later runs start in seconds.
 
-Verify: open <http://127.0.0.1:8765/health>. It should show `{"status": "ok", "device": "cuda"}`.
+An NVIDIA GPU is used automatically if present (about a second per page);
+without one, OCR runs on the CPU and takes a few seconds per page instead.
+
+Verify: open <http://127.0.0.1:8765/health>. It should show
+`{"status": "ok", "device": "cuda"}` (`"cpu"` without a GPU).
 
 For daily use, `server/start-tray.vbs` starts the server silently with a tray
 icon (right-click it to check health or quit). To start it with Windows, put a
 shortcut to `start-tray.vbs` in `shell:startup`.
 
-### 2. Chrome extension
+### 3. Chrome extension
 
 1. `chrome://extensions` → enable **Developer mode**
-2. **Load unpacked** → select the `extension/` folder
+2. **Load unpacked** → select the `extension/` folder from step 1
 
 The extension icon's popup shows whether it can reach the OCR server.
 
@@ -72,15 +93,21 @@ Known limits: furigana is skipped on purpose, handwritten sound effects are
 often missed, and very small text needs a higher-resolution capture (read in
 fullscreen).
 
-## Status
+## Troubleshooting
 
-- [x] Local OCR server (FastAPI + mokuro/manga-ocr), tray mode
-- [x] Invisible selectable overlay, fullscreen-safe geometry
-- [x] Automatic OCR on page flip (debounced, cached, capture hygiene)
-- [x] Server-side line refinement + per-line re-OCR
-- [x] Alt+O one-shot OCR on arbitrary sites
-- [x] User-managed auto-OCR site list (popup toggle + permission prompt)
-- [ ] Local files / offline reader support
+- **Popup says "Server not running"**: start it with `server/start-tray.vbs`
+  (or `run-server.bat` to see logs). The first OCR after a start takes a few
+  extra seconds while models load.
+- **No popup on hover**: make sure Yomitan is enabled and you're holding its
+  scan key (Shift by default). Check **Show text boxes (debug)** in the popup
+  to see whether text was found and where.
+- **Text found but misaligned or wrong**: small text OCRs poorly at small
+  window sizes; read in fullscreen. If a whole bubble is missing, that's
+  usually the detector's recall limit on busy art.
+- **Alt+O does nothing**: another extension may own the shortcut; rebind it
+  at `chrome://extensions/shortcuts`.
+
+Planned: local files / offline reader support.
 
 ## License
 
