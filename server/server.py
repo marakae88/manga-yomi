@@ -80,7 +80,7 @@ def refine_block_lines(gray, box, quads, vertical):
 
     profile = ink.mean(axis=0) if vertical else ink.mean(axis=1)
     # an erased border line leaves a zeroed row/col that reads as a fake
-    # 1px gap and derails band splitting — bridge it with its neighbors
+    # 1px gap and derails band splitting; bridge it with its neighbors
     erased = full_cols if vertical else full_rows
     if erased.any() and not erased.all():
         pos = np.arange(profile.size)
@@ -88,7 +88,7 @@ def refine_block_lines(gray, box, quads, vertical):
     if not np.any(profile >= 0.02):
         return None, "no ink"
     # sub-4px gaps don't split a band (thin white slivers inside a column),
-    # but tiny low-res text has real inter-column gaps under 4px too — if we
+    # but tiny low-res text has real inter-column gaps under 4px too; if we
     # find fewer bands than lines, retry with tighter gap closing. Touching
     # columns whose anti-aliasing bleeds ink into the gap never dip below the
     # base threshold at all, so also retry with higher thresholds: the valley
@@ -116,7 +116,7 @@ def refine_block_lines(gray, box, quads, vertical):
     if not bands:
         return None, "no bands"
     # furigana/noise bands are much narrower than the text columns around
-    # them; compare against the MEDIAN width (max is unreliable — a column
+    # them; compare against the MEDIAN width (max is unreliable; a column
     # that merges with its own furigana or brackets can be ~2x normal)
     med = sorted(b1 - b0 for b0, b1 in bands)[len(bands) // 2]
     main = [b for b in bands if (b[1] - b[0]) >= med * 0.5]
@@ -174,7 +174,7 @@ def refine_block_lines(gray, box, quads, vertical):
             # touching columns merge into one ink band (furigana bridges every
             # gap), but the quads still know each column's position. Cluster
             # quads by band-axis overlap: true duplicates overlap in x, side-
-            # by-side columns don't — never dup-drop across clusters.
+            # by-side columns don't; never dup-drop across clusters.
             clusters = []
             for c in sorted(group, key=lambda c: c[4]):
                 for cl in clusters:
@@ -348,7 +348,7 @@ async def ocr(request: Request):
     pairs, fails = detect_and_refine(rgb_full, img_bytes=img_bytes)
 
     # Letterboxed spreads waste the detector's fixed input resolution on dead
-    # space, which wrecks tiny dense text — but trimming changes the detector's
+    # space, which wrecks tiny dense text; but trimming changes the detector's
     # input scale, which perturbs pages that were fine (verified: phantom
     # blocks on a title page). So trim only as a rescue: when the full-frame
     # pass is visibly struggling AND there is real dead space to reclaim.
@@ -374,7 +374,7 @@ async def ocr(request: Request):
                 x1, y1, x2, y2 = refined[i]
                 snapped.append([[x1, y1], [x2, y1], [x2, y2], [x1, y2]])
                 # the detector OCR'd its own sloppy overlapping crops, so its
-                # texts carry duplicated/garbled content — re-read from the
+                # texts carry duplicated/garbled content; re-read from the
                 # corrected box instead
                 crop = rgb.crop((max(0, x1 - 4), max(0, y1 - 4), x2 + 4, y2 + 4))
                 text = state["mpocr"].mocr(crop)
@@ -532,7 +532,7 @@ def run_tray():
     icon = pystray.Icon(
         "manga-yomi",
         im,
-        f"manga-yomi OCR server — port 8765 (rev {REV})",
+        f"manga-yomi OCR server; port 8765 (rev {REV})",
         menu=pystray.Menu(
             pystray.MenuItem(
                 "Health check",

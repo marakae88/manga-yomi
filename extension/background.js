@@ -55,7 +55,7 @@ async function triggerOcr(tab) {
       });
       return await chrome.tabs.sendMessage(tab.id, { type: "trigger-ocr" });
     } catch {
-      // chrome:// pages, the Web Store, etc. — nothing we can do
+      // chrome:// pages, the Web Store, etc.: nothing we can do
       return { ok: false, error: "can't run on this page" };
     }
   }

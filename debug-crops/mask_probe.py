@@ -1,7 +1,7 @@
 """Does the detector's text segmentation mask separate columns that raw-ink
-profiling can't? For each block: run refine_block_lines twice — once on the
+profiling can't? For each block: run refine_block_lines twice; once on the
 real grayscale (production behavior), once on the inverted mask_refined as a
-fake grayscale — and compare. Saves per-block side-by-side crops."""
+fake grayscale; and compare. Saves per-block side-by-side crops."""
 
 import os
 import sys

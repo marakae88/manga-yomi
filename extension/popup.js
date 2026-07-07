@@ -106,7 +106,7 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       siteLabel.hidden = false;
     }
   } catch {
-    // no usable URL (chrome:// pages etc.) — leave the toggle hidden
+    // no usable URL (chrome:// pages etc.): leave the toggle hidden
   }
   refreshSiteUi();
 });

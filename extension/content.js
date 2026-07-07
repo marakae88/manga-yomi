@@ -359,7 +359,7 @@ document.addEventListener("fullscreenchange", () => {
   scheduleAutoOcr();
 });
 
-// Page flips (click / arrow keys) make the overlay stale — clear it and,
+// Page flips (click / arrow keys) make the overlay stale; clear it and,
 // in auto mode, OCR the new page once it settles.
 window.addEventListener(
   "mousedown",
@@ -384,7 +384,7 @@ window.addEventListener(
 
 // Yomitan's scan-selection otherwise lingers as a visible highlight.
 // A keyup listener misses it when focus is inside Yomitan's popup frame,
-// but selectionchange fires on our document regardless of focus — clear
+// but selectionchange fires on our document regardless of focus; clear
 // any overlay selection shortly after it settles (popup stays open).
 let selClearTimer;
 document.addEventListener("selectionchange", () => {

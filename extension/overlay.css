@@ -23,7 +23,7 @@
 
 /* Yomitan scans by selecting our text, which Chrome paints as a visible
    glyph on its theme highlight. Chromium DISCARDS alpha-0 ::selection
-   colors and falls back to that default, so `transparent` doesn't work —
+   colors and falls back to that default, so `transparent` doesn't work;
    alpha 1/255 is honored and still invisible. */
 .manga-yomi-line::selection {
   background: rgba(0, 0, 0, 0.02) !important;
