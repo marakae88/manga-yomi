@@ -1,5 +1,14 @@
+(() => {
+// On non-manga sites this file is injected on demand (Alt+O); a second
+// Alt+O must not register duplicate listeners
+if (window.__mangaYomiLoaded) return;
+window.__mangaYomiLoaded = true;
+
 const OVERLAY_ID = "manga-yomi-overlay";
 const TOAST_ID = "manga-yomi-toast";
+// auto-OCR-on-flip is only tuned for the manga readers; on arbitrary
+// sites (injected via Alt+O) every click would trigger a capture
+const AUTO_SITE = /(^|\.)ynjn\.jp$|(^|\.)championcross\.jp$/.test(location.hostname);
 let debugBoxes = false;
 let autoOcr = true;
 
@@ -68,7 +77,7 @@ function invalidateOverlay() {
 
 let autoTimer;
 function scheduleAutoOcr() {
-  if (!autoOcr) return;
+  if (!autoOcr || !AUTO_SITE) return;
   clearTimeout(autoTimer);
   // wait for the flip animation / new page render to settle
   autoTimer = setTimeout(() => {
@@ -177,12 +186,28 @@ function pageRect() {
     const r = el.getBoundingClientRect();
     const ix = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
     const iy = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
-    if (ix * iy > 0) visible.push({ r, area: ix * iy });
+    if (ix * iy > 0) visible.push({ el, r, area: ix * iy });
   }
   if (!visible.length) return null;
   visible.sort((a, b) => b.area - a.area);
   // keep near-largest elements too, so two-page spreads stay together
   const keep = visible.filter((v) => v.area >= visible[0].area * 0.4);
+  if (debugBoxes) {
+    // what IS the page? if it's a plain <img> (or a canvas with a backing
+    // store bigger than its CSS size), we could OCR the source at full
+    // resolution instead of the screen pixels
+    console.log(
+      "[manga-yomi] page elements",
+      keep.map(({ el, r }) => ({
+        tag: el.tagName,
+        cssSize: `${Math.round(r.width)}x${Math.round(r.height)}`,
+        backing: el.tagName === "IMG"
+          ? `${el.naturalWidth}x${el.naturalHeight}`
+          : `${el.width}x${el.height}`,
+        src: (el.currentSrc || el.src || "").slice(0, 120),
+      }))
+    );
+  }
   const left = Math.max(0, Math.min(...keep.map((v) => v.r.left)));
   const top = Math.max(0, Math.min(...keep.map((v) => v.r.top)));
   const right = Math.min(vw, Math.max(...keep.map((v) => v.r.right)));
@@ -266,15 +291,41 @@ function renderOverlay(res, rect) {
       // Manga text is nearly all full-width chars: advance ≈ font-size,
       // so size glyphs off the line's real length, not mokuro's font_size.
       const n = line.length;
-      const fontSize = block.vertical ? Math.min(w, h / n) : Math.min(h, w / n);
-      el.style.fontSize = `${fontSize / k}px`;
-      // advance ≈ font-size is a few % off, and the error accumulates so the
-      // LAST character lands short of the box end; spread the leftover
-      if (n > 1) {
-        const leftover = (block.vertical ? h : w) - n * fontSize;
-        el.style.letterSpacing = `${leftover / (n - 1) / k}px`;
+      let fontSize = block.vertical ? Math.min(w, h / n) : Math.min(h, w / n);
+      // Calligraphic titles and tight low-res columns come back as ONE
+      // detected line spanning several physical columns (no ink valley to
+      // split on). One stretched skinny column puts every glyph off-target;
+      // wrapping into vertical-rl columns (right to left = reading order)
+      // tracks the real layout. Only trust ink-refined boxes (fallback
+      // quads run loose, so the geometry lies), and only switch when
+      // clearly better: a 20% margin keeps true single columns single.
+      let cols = 1;
+      if (block.vertical && block.refined && n > 1) {
+        for (let c = 2; c <= Math.min(n, 6); c++) {
+          const fs = Math.min(h / Math.ceil(n / c), w / c);
+          if (fs > fontSize * 1.2) {
+            fontSize = fs;
+            cols = c;
+          }
+        }
       }
-      el.style.lineHeight = `${(block.vertical ? w : h) / k}px`;
+      el.style.fontSize = `${fontSize / k}px`;
+      if (cols > 1) {
+        const chars = Math.ceil(n / cols);
+        // stretch each column to the full box height so wrap points land
+        // exactly every `chars` characters
+        el.style.letterSpacing = `${(h - chars * fontSize) / chars / k}px`;
+        el.style.lineHeight = `${w / cols / k}px`;
+        el.style.wordBreak = "break-all";
+      } else {
+        // advance ≈ font-size is a few % off, and the error accumulates so
+        // the LAST character lands short of the box end; spread the leftover
+        if (n > 1) {
+          const leftover = (block.vertical ? h : w) - n * fontSize;
+          el.style.letterSpacing = `${leftover / (n - 1) / k}px`;
+        }
+        el.style.lineHeight = `${(block.vertical ? w : h) / k}px`;
+      }
       el.textContent = line;
       overlay.appendChild(el);
     });
@@ -333,3 +384,4 @@ document.addEventListener("selectionchange", () => {
     }
   }, 600);
 });
+})();

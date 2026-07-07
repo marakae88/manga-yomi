@@ -16,11 +16,34 @@ spec.loader.exec_module(srv)
 IMG = sys.argv[1] if len(sys.argv) > 1 else r"D:\manga-yomi\debug-crops\fail1.jpg"
 TAG = os.path.splitext(os.path.basename(IMG))[0]
 
+_im = Image.open(IMG).convert("RGB")
+
 from mokuro.manga_page_ocr import MangaPageOcr
 
 print("loading models (cpu)...")
 mpocr = MangaPageOcr(force_cpu=True, detector_input_size=2048)
 result = mpocr(IMG)
+
+
+def _quads(b):
+    return [[[float(x), float(y)] for x, y in q] for q in
+            (qq.tolist() if hasattr(qq, "tolist") else qq for qq in b["lines_coords"])]
+
+
+# mirror the server's rescue trim: retry on trimmed content only when the
+# full-frame pass struggles and there is real dead space to reclaim
+_x, _y, _w, _h = srv.trim_margins(_im)
+if "notrim" not in sys.argv and _w * _h < 0.9 * _im.width * _im.height:
+    _g = np.asarray(_im.convert("L"))
+    _nf = sum(
+        1 for b in result["blocks"]
+        if srv.refine_block_lines(_g, [float(v) for v in b["box"]], _quads(b), bool(b["vertical"]))[0] is None
+    )
+    if _nf >= 2:
+        print(f"trim: pass A {_nf} refine failures -> ({_x},{_y}) {_w}x{_h}")
+        IMG = rf"D:\manga-yomi\debug-crops\{TAG}_trimmed_tmp.png"
+        _im.crop((_x, _y, _x + _w, _y + _h)).save(IMG)
+        result = mpocr(IMG)
 print("img", result["img_width"], "x", result["img_height"])
 
 gray = np.asarray(Image.open(IMG).convert("L"))

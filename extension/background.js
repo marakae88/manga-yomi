@@ -17,10 +17,26 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.commands.onCommand.addListener(async (command) => {
-  if (command === "ocr-page") {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, { type: "trigger-ocr" }).catch(() => {});
+  if (command !== "ocr-page") return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return;
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: "trigger-ocr" });
+  } catch {
+    // no content script in this tab — a site outside the manifest matches.
+    // The keyboard command grants activeTab, so inject on the fly.
+    try {
+      await chrome.scripting.insertCSS({
+        target: { tabId: tab.id },
+        files: ["overlay.css"],
+      });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["content.js"],
+      });
+      await chrome.tabs.sendMessage(tab.id, { type: "trigger-ocr" });
+    } catch {
+      // chrome:// pages, the Web Store, etc. — nothing we can do
     }
   }
 });

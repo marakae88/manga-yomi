@@ -6,3 +6,4 @@ mokuro>=0.2.4
 transformers<5
 fastapi
 uvicorn[standard]
+pystray

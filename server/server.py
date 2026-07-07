@@ -1,6 +1,16 @@
 import os
 import re
 import tempfile
+
+_here = os.path.dirname(os.path.abspath(__file__))
+# keep model cache and scratch temp off C: (it's full); the .bat launcher
+# sets these too, but the tray launcher relies on the defaults here
+os.environ.setdefault("HF_HOME", os.path.join(_here, "hf-cache"))
+if os.name == "nt":
+    _tmp = os.path.join(_here, "pip-temp")
+    os.makedirs(_tmp, exist_ok=True)
+    os.environ["TMP"] = _tmp
+    os.environ["TEMP"] = _tmp
 from contextlib import asynccontextmanager
 from io import BytesIO
 
@@ -156,34 +166,77 @@ def refine_block_lines(gray, box, quads, vertical):
                     key=lambda j: abs((main[j][0] + main[j][1]) / 2 - (q0 + q1) / 2),
                 )
             sp = [(p[1] if vertical else p[0]) - soff for p in q]
-            cand.append((i, best, min(sp), max(sp)))
-        # duplicates land on the same band AND overlap along the span axis;
-        # keep the longest, drop the rest (stacked ghost text breaks selection)
+            cand.append((i, best, min(sp), max(sp), q0, q1))
         pairs = []
         dropped = 0
         for j in range(len(main)):
-            group = sorted((c for c in cand if c[1] == j), key=lambda c: c[2] - c[3])
-            kept = []
-            band_pairs = []
-            for i, _, s0, s1 in group:
-                if any(
-                    min(s1, k1) - max(s0, k0) > 0.5 * max(min(s1 - s0, k1 - k0), 1)
-                    for k0, k1 in kept
-                ):
-                    dropped += 1
-                    continue
-                kept.append((s0, s1))
-                m = (main[j][1] - main[j][0]) // 2
-                band_pairs.append([i, main[j], s0 - m, s1 + m])
-            # neighbours sharing a band must not overlap, or their invisible
-            # texts stack in the overlap zone; split at the midpoint
-            band_pairs.sort(key=lambda p: p[2])
-            for a, b2 in zip(band_pairs, band_pairs[1:]):
-                if b2[2] < a[3]:
-                    mid = (b2[2] + a[3]) // 2
-                    a[3] = mid
-                    b2[2] = mid
-            pairs.extend(band_pairs)
+            group = [c for c in cand if c[1] == j]
+            # touching columns merge into one ink band (furigana bridges every
+            # gap), but the quads still know each column's position. Cluster
+            # quads by band-axis overlap: true duplicates overlap in x, side-
+            # by-side columns don't — never dup-drop across clusters.
+            clusters = []
+            for c in sorted(group, key=lambda c: c[4]):
+                for cl in clusters:
+                    if min(c[5], cl[1]) - max(c[4], cl[0]) > 0.5 * max(
+                        min(c[5] - c[4], cl[1] - cl[0]), 1
+                    ):
+                        cl[0] = min(cl[0], c[4])
+                        cl[1] = max(cl[1], c[5])
+                        cl[2].append(c)
+                        break
+                else:
+                    clusters.append([c[4], c[5], [c]])
+            b0, b1 = main[j]
+            if len(clusters) > 1:
+                # carve the band into one sub-band per column
+                subs = [
+                    [max(b0, min(int(c0), b1 - 3)), min(b1, max(int(c1), b0 + 3))]
+                    for c0, c1, _ in clusters
+                ]
+                # real columns sharing a band are near-uniform width; a much
+                # narrower carve is a furigana strip or phantom quad, and
+                # re-OCR of a few-px sliver hallucinates whole sentences
+                ws = sorted(s1 - s0 for s0, s1 in subs)
+                medw = ws[len(ws) // 2]
+                thin = [k for k in range(len(subs)) if subs[k][1] - subs[k][0] < 0.5 * medw]
+                for k in thin:
+                    dropped += len(clusters[k][2])
+                clusters = [cl for k, cl in enumerate(clusters) if k not in thin]
+                subs = [s for k, s in enumerate(subs) if k not in thin]
+                if len(clusters) == 1:
+                    subs = [[b0, b1]]
+                for a, b2 in zip(subs, subs[1:]):
+                    if b2[0] < a[1]:
+                        mid = (b2[0] + a[1]) // 2
+                        a[1] = mid
+                        b2[0] = mid
+            else:
+                subs = [[b0, b1]]
+            for (_, _, members), sub in zip(clusters, subs):
+                # duplicates overlap along the span axis too; keep the
+                # longest, drop the rest (stacked ghost text breaks selection)
+                kept = []
+                band_pairs = []
+                for i, _, s0, s1, _, _ in sorted(members, key=lambda c: c[2] - c[3]):
+                    if any(
+                        min(s1, k1) - max(s0, k0) > 0.5 * max(min(s1 - s0, k1 - k0), 1)
+                        for k0, k1 in kept
+                    ):
+                        dropped += 1
+                        continue
+                    kept.append((s0, s1))
+                    m = (sub[1] - sub[0]) // 2
+                    band_pairs.append([i, tuple(sub), s0 - m, s1 + m])
+                # neighbours sharing a column must not overlap, or their
+                # invisible texts stack in the overlap zone; split at midpoint
+                band_pairs.sort(key=lambda p: p[2])
+                for a, b2 in zip(band_pairs, band_pairs[1:]):
+                    if b2[2] < a[3]:
+                        mid = (b2[2] + a[3]) // 2
+                        a[3] = mid
+                        b2[2] = mid
+                pairs.extend(band_pairs)
         why = f"ok (overlap-matched, {len(main)} bands / {len(quads)} lines, {dropped} dups dropped)"
 
     out = [None] * len(quads)
@@ -203,7 +256,7 @@ def plain(v):  # mokuro returns numpy scalars/arrays, which break JSON
     return v
 
 
-REV = "2026-07-06.8"
+REV = "2026-07-06.12"
 
 
 @app.get("/health")
@@ -215,6 +268,70 @@ def health():
     }
 
 
+def trim_margins(rgb):
+    """Bounding box of non-uniform content, as (x, y, w, h).
+
+    Viewer spreads with a blank half (letterboxed bonus pages) waste the
+    detector's fixed input resolution on dead space, which measurably
+    degrades its line quads. Trim near-constant margins before detection
+    and offset the results back afterwards.
+    """
+    g = np.asarray(rgb.convert("L")).astype(np.int16)
+    h, w = g.shape
+    border = np.concatenate([g[0, :], g[-1, :], g[:, 0], g[:, -1]])
+    bg = int(np.median(border))
+    content = np.abs(g - bg) > 32
+    # specks are not content: two stacked corner fiducials share a row/col
+    # and add up to ~16px, so the floor must clear that comfortably
+    rows = content.sum(axis=1) > max(24, w // 50)
+    cols = content.sum(axis=0) > max(24, h // 50)
+    if not rows.any() or not cols.any():
+        return 0, 0, w, h
+    y1, y2 = np.flatnonzero(rows)[[0, -1]]
+    x1, x2 = np.flatnonzero(cols)[[0, -1]]
+    pad = 8
+    x1 = max(0, int(x1) - pad)
+    y1 = max(0, int(y1) - pad)
+    x2 = min(w, int(x2) + 1 + pad)
+    y2 = min(h, int(y2) + 1 + pad)
+    if (x2 - x1) * (y2 - y1) > 0.95 * w * h:
+        return 0, 0, w, h  # nothing worth trimming
+    return x1, y1, x2 - x1, y2 - y1
+
+
+def detect_and_refine(rgb, img_bytes=None):
+    """One detection + refinement pass. Returns ([(block, refined)], failures)."""
+    # MangaPageOcr reads from a path, so round-trip through a temp file
+    fd, path = tempfile.mkstemp(suffix=".png")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            if img_bytes is not None:
+                f.write(img_bytes)
+            else:
+                rgb.save(f, "PNG")
+        result = state["mpocr"](path)
+    finally:
+        os.unlink(path)
+    gray = np.asarray(rgb.convert("L"))
+    pairs = []
+    fails = 0
+    for b in result.get("blocks", []):
+        vertical = bool(b.get("vertical", True))
+        quads = plain(b.get("lines_coords", []))
+        if quads:
+            refined, why = refine_block_lines(gray, plain(b["box"]), quads, vertical)
+        else:
+            refined, why = None, "no quads"
+        if refined is None:
+            fails += 1
+        print(
+            f"[refine] block {len(pairs)} vertical={vertical} "
+            f"lines={len(quads)} box={plain(b['box'])} -> {why}"
+        )
+        pairs.append((b, refined))
+    return pairs, fails
+
+
 @app.post("/ocr")
 async def ocr(request: Request):
     if "mpocr" not in state:
@@ -224,33 +341,30 @@ async def ocr(request: Request):
     if not img_bytes:
         raise HTTPException(status_code=400, detail="empty request body")
 
-    # MangaPageOcr reads from a path, so round-trip through a temp file
-    fd, path = tempfile.mkstemp(suffix=".png")
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(img_bytes)
-        result = state["mpocr"](path)
-    finally:
-        os.unlink(path)
-
     from PIL import Image
 
-    rgb = Image.open(BytesIO(img_bytes)).convert("RGB")
-    gray = np.asarray(rgb.convert("L"))
+    rgb_full = Image.open(BytesIO(img_bytes)).convert("RGB")
+    rgb = rgb_full
+    pairs, fails = detect_and_refine(rgb_full, img_bytes=img_bytes)
+
+    # Letterboxed spreads waste the detector's fixed input resolution on dead
+    # space, which wrecks tiny dense text — but trimming changes the detector's
+    # input scale, which perturbs pages that were fine (verified: phantom
+    # blocks on a title page). So trim only as a rescue: when the full-frame
+    # pass is visibly struggling AND there is real dead space to reclaim.
+    ox, oy, tw, th = trim_margins(rgb_full)
+    trimmed = False
+    if fails >= 2 and tw * th < 0.9 * rgb_full.width * rgb_full.height:
+        print(f"[trim] {fails} refine failures -> retry on content at ({ox},{oy}) {tw}x{th}")
+        rgb = rgb_full.crop((ox, oy, ox + tw, oy + th))
+        pairs, _ = detect_and_refine(rgb)
+        trimmed = True
 
     blocks = []
-    for b in result.get("blocks", []):
+    for b, refined in pairs:
         lines = b.get("lines", [])
         vertical = bool(b.get("vertical", True))
         quads = plain(b.get("lines_coords", []))
-        if quads:
-            refined, why = refine_block_lines(gray, plain(b["box"]), quads, vertical)
-        else:
-            refined, why = None, "no quads"
-        print(
-            f"[refine] block {len(blocks)} vertical={vertical} "
-            f"lines={len(quads)} box={plain(b['box'])} -> {why}"
-        )
         snapped = []
         kept_lines = []
         for i, quad in enumerate(quads):
@@ -275,10 +389,17 @@ async def ocr(request: Request):
                 # keep the detector's own quad rather than risk worse
                 snapped.append(quad)
                 kept_lines.append(lines[i])
+        box = plain(b["box"])
+        if trimmed:  # back to full-capture coordinates
+            box = [box[0] + ox, box[1] + oy, box[2] + ox, box[3] + oy]
+            snapped = [[[x + ox, y + oy] for x, y in q] for q in snapped]
         blocks.append(
             {
-                "box": plain(b["box"]),  # [x1, y1, x2, y2] in image pixels
+                "box": box,  # [x1, y1, x2, y2] in image pixels
                 "vertical": vertical,
+                # ink-refined boxes hug the glyphs; fallback quads run loose.
+                # The client only trusts tight boxes for column wrapping.
+                "refined": refined is not None,
                 "lines_coords": snapped,
                 "lines": kept_lines,
                 "text": "".join(kept_lines),
@@ -288,8 +409,8 @@ async def ocr(request: Request):
     state["last"] = {"img": img_bytes, "blocks": blocks}
 
     return {
-        "img_width": plain(result.get("img_width")),
-        "img_height": plain(result.get("img_height")),
+        "img_width": rgb_full.width,
+        "img_height": rgb_full.height,
         "blocks": blocks,
     }
 
@@ -376,7 +497,60 @@ def debug_registration():
     return report
 
 
-if __name__ == "__main__":
-    import uvicorn
+def run_tray():
+    import socket
+    import sys
+    import threading
+    import webbrowser
 
-    uvicorn.run(app, host="127.0.0.1", port=8765)
+    import pystray
+    import uvicorn
+    from PIL import Image as PILImage
+    from PIL import ImageDraw as PILImageDraw
+
+    # under pythonw there is no console; print() would crash the server
+    if sys.stdout is None or sys.stderr is None:
+        log = open(os.path.join(_here, "server.log"), "a", buffering=1, encoding="utf-8")
+        sys.stdout = sys.stderr = log
+
+    # already running (e.g. double-clicked twice)? leave that instance alone
+    with socket.socket() as s:
+        if s.connect_ex(("127.0.0.1", 8765)) == 0:
+            sys.exit(0)
+
+    im = PILImage.new("RGBA", (64, 64), (0, 0, 0, 0))
+    d = PILImageDraw.Draw(im)
+    d.rounded_rectangle([4, 6, 60, 46], radius=12, fill=(40, 44, 52, 255),
+                        outline=(255, 255, 255, 255), width=3)
+    d.polygon([(18, 44), (30, 44), (16, 58)], fill=(255, 255, 255, 255))
+    for x in (44, 32, 20):  # vertical text columns, manga-style
+        d.line([(x, 14), (x, 38)], fill=(255, 255, 255, 255), width=4)
+
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=8765))
+    threading.Thread(target=server.run, daemon=True).start()
+
+    icon = pystray.Icon(
+        "manga-yomi",
+        im,
+        f"manga-yomi OCR server — port 8765 (rev {REV})",
+        menu=pystray.Menu(
+            pystray.MenuItem(
+                "Health check",
+                lambda: webbrowser.open("http://127.0.0.1:8765/health"),
+            ),
+            pystray.MenuItem("Quit", lambda ic, item: ic.stop()),
+        ),
+    )
+    icon.run()
+    os._exit(0)  # torch worker threads can hang normal interpreter teardown
+
+
+if __name__ == "__main__":
+    import sys
+
+    if "--tray" in sys.argv:
+        run_tray()
+    else:
+        import uvicorn
+
+        uvicorn.run(app, host="127.0.0.1", port=8765)
