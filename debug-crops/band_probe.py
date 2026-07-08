@@ -5,7 +5,7 @@ from PIL import Image
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-IMG = r"D:\manga-yomi\debug-crops\fail3.png"
+IMG = r"D:\web-manga-ocr\debug-crops\fail3.png"
 gray = np.asarray(Image.open(IMG).convert("L"))
 
 # block 0 padded region, mirroring refine_block_lines

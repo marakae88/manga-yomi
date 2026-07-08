@@ -2,7 +2,7 @@ import sys
 import numpy as np
 from PIL import Image
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-gray = np.asarray(Image.open(r"D:\manga-yomi\debug-crops\fail1.jpg").convert("L"))
+gray = np.asarray(Image.open(r"D:\web-manga-ocr\debug-crops\fail1.jpg").convert("L"))
 # block 0 padded region from repro: ex1=108, ey1=194 (box [121,206,539,847], pad 13/21)
 ex1, ey1, ex2, ey2 = 108, 185, 552, 868
 reg = gray[ey1:ey2, ex1:ex2]

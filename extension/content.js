@@ -1,11 +1,11 @@
 (() => {
 // On non-manga sites this file is injected on demand (Alt+O); a second
 // Alt+O must not register duplicate listeners
-if (window.__mangaYomiLoaded) return;
-window.__mangaYomiLoaded = true;
+if (window.__webMangaOcrLoaded) return;
+window.__webMangaOcrLoaded = true;
 
-const OVERLAY_ID = "manga-yomi-overlay";
-const TOAST_ID = "manga-yomi-toast";
+const OVERLAY_ID = "web-manga-ocr-overlay";
+const TOAST_ID = "web-manga-ocr-toast";
 // auto-OCR-on-flip only runs on sites enabled in the popup; on other
 // sites (injected via Alt+O) every click would trigger a capture
 let autoSite = false;
@@ -144,7 +144,7 @@ function placeFiducials(rect) {
   ];
   const els = pts.map(([x, y]) => {
     const d = document.createElement("div");
-    d.className = "manga-yomi-fiducial";
+    d.className = "web-manga-ocr-fiducial";
     d.style.left = `${x}px`;
     d.style.top = `${y}px`;
     root.appendChild(d);
@@ -206,7 +206,7 @@ function pageRect() {
     // store bigger than its CSS size), we could OCR the source at full
     // resolution instead of the screen pixels
     console.log(
-      "[manga-yomi] page elements",
+      "[web-manga-ocr] page elements",
       keep.map(({ el, r }) => ({
         tag: el.tagName,
         cssSize: `${Math.round(r.width)}x${Math.round(r.height)}`,
@@ -261,14 +261,14 @@ function renderOverlay(res, rect) {
   // same offset/scale/k math as the text. If it doesn't hug the manga page,
   // the geometry is wrong and the console numbers say by how much.
   const frame = document.createElement("div");
-  frame.className = "manga-yomi-debug-frame";
+  frame.className = "web-manga-ocr-debug-frame";
   frame.style.left = `${offX / k}px`;
   frame.style.top = `${offY / k}px`;
   frame.style.width = `${(rect ? rect.width : window.innerWidth) / k}px`;
   frame.style.height = `${(rect ? rect.height : window.innerHeight) / k}px`;
   overlay.appendChild(frame);
   if (debugBoxes) {
-    console.log("[manga-yomi] geometry", {
+    console.log("[web-manga-ocr] geometry", {
       k,
       overlayBox: { left: box.left, top: box.top, width: box.width, height: box.height },
       overlayLayout: { width: overlay.offsetWidth, height: overlay.offsetHeight },
@@ -292,7 +292,7 @@ function renderOverlay(res, rect) {
       const h = (y2 - y1) * scale;
 
       const el = document.createElement("div");
-      el.className = "manga-yomi-line" + (block.vertical ? " vertical" : "");
+      el.className = "web-manga-ocr-line" + (block.vertical ? " vertical" : "");
       el.style.left = `${(offX + x1 * scale) / k}px`;
       el.style.top = `${(offY + y1 * scale) / k}px`;
       el.style.width = `${w / k}px`;

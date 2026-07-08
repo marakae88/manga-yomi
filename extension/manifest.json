@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "manga-yomi",
-  "version": "0.2.0",
+  "name": "web-manga-ocr",
+  "version": "0.2.1",
   "description": "OCR overlay that makes Yomitan work on manga sites",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": [

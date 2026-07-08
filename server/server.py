@@ -252,7 +252,7 @@ def plain(v):  # mokuro returns numpy scalars/arrays, which break JSON
     return v
 
 
-REV = "2026-07-07.1"
+REV = "2026-07-08.1"
 
 
 @app.get("/health")
@@ -526,9 +526,9 @@ def run_tray():
     threading.Thread(target=server.run, daemon=True).start()
 
     icon = pystray.Icon(
-        "manga-yomi",
+        "web-manga-ocr",
         im,
-        f"manga-yomi OCR server; port 8765 (rev {REV})",
+        f"web-manga-ocr OCR server; port 8765 (rev {REV})",
         menu=pystray.Menu(
             pystray.MenuItem(
                 "Health check",

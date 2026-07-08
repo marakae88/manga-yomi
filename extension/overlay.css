@@ -1,11 +1,11 @@
-#manga-yomi-overlay {
+#web-manga-ocr-overlay {
   position: fixed;
   inset: 0;
   z-index: 2147483646;
   pointer-events: none;
 }
 
-.manga-yomi-line {
+.web-manga-ocr-line {
   position: absolute;
   color: transparent;
   pointer-events: auto;
@@ -17,7 +17,7 @@
   text-align: center;
 }
 
-.manga-yomi-line.vertical {
+.web-manga-ocr-line.vertical {
   writing-mode: vertical-rl;
 }
 
@@ -25,12 +25,12 @@
    glyph on its theme highlight. Chromium DISCARDS alpha-0 ::selection
    colors and falls back to that default, so `transparent` doesn't work;
    alpha 1/255 is honored and still invisible. */
-.manga-yomi-line::selection {
+.web-manga-ocr-line::selection {
   background: rgba(0, 0, 0, 0.02) !important;
   color: rgba(0, 0, 0, 0.02) !important;
 }
 
-#manga-yomi-toast {
+#web-manga-ocr-toast {
   position: fixed;
   right: 16px;
   bottom: 16px;
@@ -43,12 +43,12 @@
   pointer-events: none;
 }
 
-.manga-yomi-debug-frame {
+.web-manga-ocr-debug-frame {
   position: absolute;
   pointer-events: none;
 }
 
-.manga-yomi-fiducial {
+.web-manga-ocr-fiducial {
   position: fixed;
   width: 8px;
   height: 8px;
@@ -57,11 +57,11 @@
   pointer-events: none;
 }
 
-#manga-yomi-overlay.debug .manga-yomi-debug-frame {
+#web-manga-ocr-overlay.debug .web-manga-ocr-debug-frame {
   outline: 2px solid rgba(0, 110, 255, 0.9);
 }
 
-#manga-yomi-overlay.debug .manga-yomi-line {
+#web-manga-ocr-overlay.debug .web-manga-ocr-line {
   color: rgba(255, 0, 0, 0.65);
   outline: 1px solid rgba(255, 0, 0, 0.5);
   background: rgba(255, 255, 0, 0.15);

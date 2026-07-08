@@ -25,9 +25,9 @@ if not exist venv\.deps-ok (
         exit /b 1
     )
     venv\Scripts\python -m pip install --upgrade pip
-    venv\Scripts\pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+    venv\Scripts\python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
     if errorlevel 1 goto :pipfail
-    venv\Scripts\pip install -r requirements.txt
+    venv\Scripts\python -m pip install -r requirements.txt
     if errorlevel 1 goto :pipfail
     echo ok > venv\.deps-ok
 )

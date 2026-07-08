@@ -7,18 +7,18 @@ import os
 import sys
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-os.environ.setdefault("HF_HOME", r"D:\manga-yomi\server\hf-cache")
+os.environ.setdefault("HF_HOME", r"D:\web-manga-ocr\server\hf-cache")
 
 import importlib.util
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-spec = importlib.util.spec_from_file_location("srv", r"D:\manga-yomi\server\server.py")
+spec = importlib.util.spec_from_file_location("srv", r"D:\web-manga-ocr\server\server.py")
 srv = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(srv)
 
-IMG = sys.argv[1] if len(sys.argv) > 1 else r"D:\manga-yomi\debug-crops\fail4.png"
+IMG = sys.argv[1] if len(sys.argv) > 1 else r"D:\web-manga-ocr\debug-crops\fail4.png"
 TAG = os.path.splitext(os.path.basename(IMG))[0]
 
 from mokuro.manga_page_ocr import MangaPageOcr
@@ -36,7 +36,7 @@ gray = np.asarray(Image.open(IMG).convert("L"))
 # mask_refined: text pixels white (255) on black. Invert -> text dark, so it
 # drops into refine_block_lines unchanged as a fake grayscale.
 fake_gray = 255 - mask_refined
-Image.fromarray(mask_refined).save(rf"D:\manga-yomi\debug-crops\{TAG}_mask.png")
+Image.fromarray(mask_refined).save(rf"D:\web-manga-ocr\debug-crops\{TAG}_mask.png")
 
 for i, blk in enumerate(blk_list):
     box = [float(v) for v in blk.xyxy]
@@ -81,7 +81,7 @@ for i, blk in enumerate(blk_list):
     combo = Image.new("RGB", (left.width * 2 + 4, left.height), (255, 0, 255))
     combo.paste(left, (0, 0))
     combo.paste(right, (left.width + 4, 0))
-    combo.save(rf"D:\manga-yomi\debug-crops\{TAG}_blk{i}_maskcmp.png")
+    combo.save(rf"D:\web-manga-ocr\debug-crops\{TAG}_blk{i}_maskcmp.png")
 
 print(f"\nsaved {TAG}_mask.png and per-block {TAG}_blk*_maskcmp.png "
       "(orange=raw-ink refine, blue=mask refine)")

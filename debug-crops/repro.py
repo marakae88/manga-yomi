@@ -2,18 +2,18 @@ import os
 import sys
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-os.environ.setdefault("HF_HOME", r"D:\manga-yomi\server\hf-cache")
+os.environ.setdefault("HF_HOME", r"D:\web-manga-ocr\server\hf-cache")
 
 import importlib.util
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-spec = importlib.util.spec_from_file_location("srv", r"D:\manga-yomi\server\server.py")
+spec = importlib.util.spec_from_file_location("srv", r"D:\web-manga-ocr\server\server.py")
 srv = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(srv)
 
-IMG = sys.argv[1] if len(sys.argv) > 1 else r"D:\manga-yomi\debug-crops\fail1.jpg"
+IMG = sys.argv[1] if len(sys.argv) > 1 else r"D:\web-manga-ocr\debug-crops\fail1.jpg"
 TAG = os.path.splitext(os.path.basename(IMG))[0]
 
 _im = Image.open(IMG).convert("RGB")
@@ -41,7 +41,7 @@ if "notrim" not in sys.argv and _w * _h < 0.9 * _im.width * _im.height:
     )
     if _nf >= 2:
         print(f"trim: pass A {_nf} refine failures -> ({_x},{_y}) {_w}x{_h}")
-        IMG = rf"D:\manga-yomi\debug-crops\{TAG}_trimmed_tmp.png"
+        IMG = rf"D:\web-manga-ocr\debug-crops\{TAG}_trimmed_tmp.png"
         _im.crop((_x, _y, _x + _w, _y + _h)).save(IMG)
         result = mpocr(IMG)
 print("img", result["img_width"], "x", result["img_height"])
@@ -87,6 +87,6 @@ for i, b in enumerate(result["blocks"]):
             ys = [p[1] for p in q]
             d_ref.rectangle([min(xs), min(ys), max(xs), max(ys)], outline=(255, 140, 0), width=2)
 
-im.save(rf"D:\manga-yomi\debug-crops\{TAG}_raw.png")
-im2.save(rf"D:\manga-yomi\debug-crops\{TAG}_refined.png")
+im.save(rf"D:\web-manga-ocr\debug-crops\{TAG}_raw.png")
+im2.save(rf"D:\web-manga-ocr\debug-crops\{TAG}_refined.png")
 print(f"\nsaved {TAG}_raw.png (detector output) and {TAG}_refined.png (blue=refined, orange=fallback)")

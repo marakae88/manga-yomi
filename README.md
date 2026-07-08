@@ -1,8 +1,8 @@
-# manga-yomi
+# web-manga-ocr
 
 Makes [Yomitan](https://github.com/yomidevs/yomitan) work on manga sites.
 
-Manga pages are images/canvas, so Yomitan has no text to scan. manga-yomi bridges
+Manga pages are images/canvas, so Yomitan has no text to scan. web-manga-ocr bridges
 the gap: a Chrome extension screenshots the page, a local OCR server
 ([manga-ocr](https://github.com/kha-white/manga-ocr) via
 [mokuro](https://github.com/kha-white/mokuro)) finds and reads the speech
@@ -22,7 +22,7 @@ untested.
 ### 0. Prerequisite
 
 [Yomitan](https://chromewebstore.google.com/detail/yomitan/likgccmbimhjbgkjambclfkhldnlhbnn)
-installed in Chrome with at least one Japanese dictionary. manga-yomi only
+installed in Chrome with at least one Japanese dictionary. web-manga-ocr only
 provides the text layer; Yomitan does all the lookup.
 
 ### 1. Get the code
@@ -30,7 +30,7 @@ provides the text layer; Yomitan does all the lookup.
 Either clone the repo:
 
 ```
-git clone https://github.com/marakae88/manga-yomi.git
+git clone https://github.com/marakae88/web-manga-ocr.git
 ```
 
 or click **Code → Download ZIP** on GitHub and extract it. There is nothing to

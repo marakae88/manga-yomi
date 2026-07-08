@@ -8,15 +8,15 @@ async function syncAutoSites() {
   const { autoSites } = await chrome.storage.local.get("autoSites");
   const sites = autoSites ?? DEFAULT_SITES;
   const old = await chrome.scripting.getRegisteredContentScripts({
-    ids: ["manga-yomi-auto"],
+    ids: ["web-manga-ocr-auto"],
   });
   if (old.length) {
-    await chrome.scripting.unregisterContentScripts({ ids: ["manga-yomi-auto"] });
+    await chrome.scripting.unregisterContentScripts({ ids: ["web-manga-ocr-auto"] });
   }
   if (!sites.length) return;
   await chrome.scripting.registerContentScripts([
     {
-      id: "manga-yomi-auto",
+      id: "web-manga-ocr-auto",
       matches: sites.flatMap((h) => [`*://${h}/*`, `*://*.${h}/*`]),
       js: ["content.js"],
       css: ["overlay.css"],
@@ -30,11 +30,11 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!autoSites) {
     await chrome.storage.local.set({ autoSites: DEFAULT_SITES });
   }
-  syncAutoSites().catch((e) => console.error("[manga-yomi] site sync failed", e));
+  syncAutoSites().catch((e) => console.error("[web-manga-ocr] site sync failed", e));
 });
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.autoSites) {
-    syncAutoSites().catch((e) => console.error("[manga-yomi] site sync failed", e));
+    syncAutoSites().catch((e) => console.error("[web-manga-ocr] site sync failed", e));
   }
 });
 
